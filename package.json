@@ -1,0 +1,22 @@
+{
+  "name": "Thesis",
+  "version": "0.0.1",
+  "description": "Vulnerability",
+  "main": "app.js",
+  "dependencies": {
+    "async": "^0.9.0",
+    "casper": "^0.1.1",
+    "lodash": "^2.4.1",
+    "mongoose": "^3.8.21",
+    "phantom": "^0.7.1",
+    "phantomjs": "^1.9.13",
+    "sleep": "^1.2.0",
+    "underscore": "^1.7.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "drjova",
+  "license": "ISC"
+}
