@@ -9,7 +9,7 @@
     "lodash": "^2.4.1",
     "mongoose": "^3.8.21",
     "phantom": "^0.7.1",
-    "phantomjs": "^1.9.13",
+    "phantomjs": "^1.9.17",
     "sleep": "^1.2.0",
     "underscore": "^1.7.0"
   },

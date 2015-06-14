@@ -5,9 +5,11 @@ var request = require('request');
 var async = require('async');
 var sleep = require('sleep');
 var mongoose = require('mongoose');
+var app = require('./app');
 mongoose.connection.on('error', console.log);
 mongoose.connection.on('connect', console.log);
-
+var HARVEST = false;
+var SAVE = true;
 // require models
 require('./models');
 
@@ -24,108 +26,146 @@ mongoose.connection.on('disconnected', connect);
 var configure = require('./configure');
 var Site = mongoose.model('Sites');
 
-async.eachSeries(
-  configure.websites,
-  function(url, callback){
-    var data = [];
-    // ============ Recursivly collect the urls =========================
-    async.waterfall(
-      [
-        function(extract_from_each_page){
-          console.log('[HARVESTING]', url, '================================');
-          var paths = [];
-          var pages = _.range(10);
-          // Google search for each url
-          async.eachSeries(
-            pages,
-            function(page, page_callback){
-              var request_url = util.format(configure.google, url, page+1);
-              // Make the google search request
-              var fail = true;
-              async.whilst(
-                function(){ return fail === true},
-                function(while_callback){
-                  console.log('[PAGE]', page, '=================================');
-                  request(request_url, function(http_error, response, body){
-                    console.log('[STATUS]', response.statusCode);
-                    if(response.statusCode == 200 && !http_error){
-                      var clean = JSON.parse(body);
-                      // Extract paths
-                      async.eachSeries(
-                        clean.responseData.results,
-                        function(path, extract_next){
-                          paths.push(path.url);
-                          extract_next(null);
-                        },
-                        function(extract_error){
-                          if(extract_error){
-                            console.log('[ERROR]', extract_error);
-                          }
-                          setTimeout(function(){
-                            page_callback(null);
-                          }, 10000);
-                        }
-                      );
-                      fail = false;
-                      while_callback(null);
-                    }else{
-                      console.log('[SLEEPING]', http_error);
-                      sleep.sleep(10);
-                      while_callback(null);
-                    }
-                  });
-                },
-                function(while_error){
-                  if(while_error){
-                    console.log('While error');
-                  }
-                  console.log('[FINISH] with while loop.');
-                }
-              );
-            },
-            // Ok it finished with the links
-            function(page_error){
-              if(page_error){
-                console.log(page_error);
-              }
-              // For each page wait 5 sec
-              console.log('[WAITING]', 'for the next page 10 secs');
-              setTimeout(function(){
-                extract_from_each_page(null, paths);
-              }, 10000);
-            }
-          );
-        },
-        function(domain_paths, domain_paths_callback){
-          console.log('All urls that I\'ve collected', domain_paths);
-          var site = new Site({
-            name: url,
-            urls: domain_paths
-          });
-          site.save(function (err) {
-            if(err){
-              console.log('Error');
-            }
-            domain_paths_callback(null);
-          });
-        }
-      ],
-      function(waterfall_error, waterfall_result){
-        if(waterfall_error){
-          console.log('Error on parsing urls');
-        }
-        console.log('[FINISH]', url);
-        setTimeout(function(){
-          callback(null)
-        }, 60000);
+
+function _check_level_1(parent_callback){
+  console.log('_check_level_1');
+  var promise = Site.find({}).exec();
+  promise.then(function(sites){
+    async.eachSeries(sites, function(site, callback_level_1){
+      console.log('Site', site.name);
+      _check(site.name, site.meta, callback_level_1);
+    }, function(err){
+      if(err){
+        console.log('Error in level 1');
       }
-    );
-    // =================================================================
-  },
-  function(domain_error){
-    if(domain_error){
-      console.log('ERROR', domain_error);
+      parent_callback(null);
+    });
+  });
+}
+
+function _harvest(parent_callback){
+  async.eachSeries(configure.websites, function(url, callback){
+    var data = [];
+    request(url, function(http_error, response, body){
+      console.log('[Parsing]', url);
+      console.log('[STATUS]', response.statusCode);
+      if(response.statusCode == 200 && !http_error){
+        console.log('[RESPONSE]', response.headers);
+        var data = response.headers;
+        var site = new Site({
+          name: url,
+          urls: url,
+          meta: data
+        })
+        site.save(function (err) {
+          if(err){
+            console.log('Error');
+          }
+          callback();
+        });
+      }
+    });
+  }, function(err){
+    if (err){
+      console.log('Error', err);
     }
-    console.log('Everything is ok');
+    console.log('DONE Harvesting');
+    parent_callback(null);
+  });
+}
+
+async.waterfall([
+    function(callback) {
+      if(HARVEST){
+        Site.remove({});
+        _harvest(callback);
+      }else{
+        callback(null);
+      }
+    },
+    function(callback) {
+      if(SAVE){
+        _check_level_1(callback);
+      }else{
+        callback(null);
+      }
+    },
+    function(callback) {
+      callback(null);
+    }
+], function (err, result) {
+  process.exit();
+});
+
+
+function _check(name, data, callback_parent){
+  var results = {
+    hsts: check_hsts(data),
+    secure_cookies: check_secure_cookies(data),
+    csp: check_csp(data),
+    httponly_cookies: check_httponly_cookies(data),
+    xfo: check_xfo(data),
+    x_content: check_x_content(data)
   }
-);
+  var site = Site.findOne({name:name}, function(error, site){
+    site.results = results;
+    site.save(function (err) {
+      if(err){
+        console.log('Error');
+      }
+      callback_parent();
+    });
+  })
+}
+
+// HSTS
+function check_hsts(object){
+  // Check `Strict-Transport-Security`
+  return _.has(object, 'Strict-Transport-Security');
+}
+// Secure Cookies
+function check_secure_cookies(object){
+  if (_.has(object, 'Set-Cookie')){
+    return _.contains(object['Set-Cookie'], 'Secure');
+  }
+  return false;
+}
+// CSP
+function check_csp(object){
+  // Check `X-XSS-Protection`
+  return _.has(object, 'X-XSS-Protection');
+}
+// HTTP Only Cookies
+function check_httponly_cookies(object){
+  // Check if contains `HttpOnly`
+  if (_.has(object, 'Set-Cookie')){
+    return _.contains(object['Set-Cookie'], 'HttpOnly');
+  }
+  return false;
+}
+// XFO
+function check_xfo(object){
+  // Check `X-Frame-Options`
+  if(_.has(object, 'X-Frame-Options')){
+    return object['X-Frame-Options'] === 'SAMEORIGIN';
+  }
+  return false;
+}
+// Iframe sandboxing
+function check_iframe_sandboxing(text){
+  // Check sanbox attribute
+  return true;
+}
+// CSRF
+function check_csrf(text){
+  // Check forms for csrf
+  return true;
+}
+// Content options
+function check_x_content(object){
+  // Check `X-Content-Type-Options`
+  if(_.has(object, 'X-Content-Type-Options')){
+    return object['X-Content-Type-Options'] === 'nosniff';
+  }
+  return false;
+}

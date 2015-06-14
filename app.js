@@ -1,47 +1,44 @@
-var util = require('util');
-var request = require('request');
 var _ = require('lodash');
-var async = require('async');
-var configure = require('./configure');
 
-// For each webpage run the tests
-_(configure.websites).forEach(function(url){
-    async.waterfall([
-      function(callback){
-        var request_url = configure.google.format('url', 1);
-        request(request_url, function (error, response, body) {
-          if (!error && response.statusCode == 200) {
-            console.log(body) // Show the HTML for the Google homepage.
-          }
-        })
-      },
-      function(urls, callback){
-      }
-    ]);
-    //console.log('Get websites', url, '================================');
-    //var page = require('webpage').create();
-    //page.open(url, function(){
-    //});
-    //var data = {};
-    //var keys = [];
-    //var values = [];
-    //page.onResourceReceived = function(response){
-      //var headers = response.headers;
-      //_(headers).forEach(function(item){
-        //data[item['name']] = item['value'];
+//_(configure.websites).forEach(function(url){
+  //phantom.create(function (ph) {
+    //ph.createPage(function (page) {
+      //page.open(url, function (status) {
+        //console.log("opened google? ", status);
       //});
-    //};
-    //page.onLoadFinished = function(status) {
-      //console.log('Data', JSON.stringify(data), '\n\n');
-      //console.log('HSTS', check_hsts(data));
-      //console.log('Secure Cookies', check_secure_cookies(data));
-      //console.log('CSP', check_csp(data));
-      //console.log('HTTP Only Cookies', check_httponly_cookies(data));
-      //console.log('XFO', check_xfo(data));
-      //console.log('X Content', check_x_content(data));
-      //phantom.exit();
-    //}
-});
+      //var data = {};
+      //var keys = [];
+      //var values = [];
+      //page.onResourceReceived = function(response){
+        //console.log('dsaads', response);
+        //var headers = response.headers;
+        //_(headers).forEach(function(item){
+          //data[item['name']] = item['value'];
+        //});
+      //};
+      //page.onLoadFinished = function(status) {
+        //console.log('Data', JSON.stringify(data), '\n\n');
+        //console.log('HSTS', check_hsts(data));
+        //console.log('Secure Cookies', check_secure_cookies(data));
+        //console.log('CSP', check_csp(data));
+        //console.log('HTTP Only Cookies', check_httponly_cookies(data));
+        //console.log('XFO', check_xfo(data));
+        //console.log('X Content', check_x_content(data));
+      //}
+    //});
+  //});
+//});
+
+function _check(data, callback_parent){
+  console.log('Data', JSON.stringify(data), '\n\n');
+  console.log('HSTS', check_hsts(data));
+  console.log('Secure Cookies', check_secure_cookies(data));
+  console.log('CSP', check_csp(data));
+  console.log('HTTP Only Cookies', check_httponly_cookies(data));
+  console.log('XFO', check_xfo(data));
+  console.log('X Content', check_x_content(data));
+  callback_parent();
+}
 
 // HSTS
 function check_hsts(object){
