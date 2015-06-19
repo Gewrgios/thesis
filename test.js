@@ -8,7 +8,7 @@ var mongoose = require('mongoose');
 var app = require('./app');
 mongoose.connection.on('error', console.log);
 mongoose.connection.on('connect', console.log);
-var HARVEST = false;
+var HARVEST = true;
 var SAVE = true;
 // require models
 require('./models');
@@ -25,7 +25,6 @@ mongoose.connection.on('disconnected', connect);
 // Models
 var configure = require('./configure');
 var Site = mongoose.model('Sites');
-
 
 function _check_level_1(parent_callback){
   console.log('_check_level_1');
@@ -48,7 +47,6 @@ function _harvest(parent_callback){
     var data = [];
     request(url, function(http_error, response, body){
       console.log('[Parsing]', url);
-      console.log('[STATUS]', response.statusCode);
       if(response.statusCode == 200 && !http_error){
         console.log('[RESPONSE]', response.headers);
         var data = response.headers;
@@ -121,33 +119,37 @@ function _check(name, data, callback_parent){
 // HSTS
 function check_hsts(object){
   // Check `Strict-Transport-Security`
-  return _.has(object, 'Strict-Transport-Security');
+  return _.has(object, 'strict-transport-security');
 }
 // Secure Cookies
 function check_secure_cookies(object){
-  if (_.has(object, 'Set-Cookie')){
-    return _.contains(object['Set-Cookie'], 'Secure');
+  if (_.has(object, 'set-cookie')){
+    var result = _.some(['https', 'secure'], function(word) {
+        return  object['set-cookie'][0].toLowerCase().search(word) > 0
+    });
+    return result;
   }
-  return false;
 }
 // CSP
 function check_csp(object){
   // Check `X-XSS-Protection`
-  return _.has(object, 'X-XSS-Protection');
+  return _.has(object, 'x-xss-protection');
 }
 // HTTP Only Cookies
 function check_httponly_cookies(object){
   // Check if contains `HttpOnly`
-  if (_.has(object, 'Set-Cookie')){
-    return _.contains(object['Set-Cookie'], 'HttpOnly');
+  if (_.has(object, 'set-cookie')){
+    return object['set-cookie'][0].toLowerCase().search('httponly') > 0;
   }
-  return false;
 }
 // XFO
 function check_xfo(object){
   // Check `X-Frame-Options`
-  if(_.has(object, 'X-Frame-Options')){
-    return object['X-Frame-Options'] === 'SAMEORIGIN';
+  if(_.has(object, 'x-frame-options')){
+    var result = _.some(['sameorigin', 'deny'], function(word) {
+        return object['x-frame-options'].toLowerCase() === word;
+    });
+    return result;
   }
   return false;
 }
@@ -164,8 +166,8 @@ function check_csrf(text){
 // Content options
 function check_x_content(object){
   // Check `X-Content-Type-Options`
-  if(_.has(object, 'X-Content-Type-Options')){
-    return object['X-Content-Type-Options'] === 'nosniff';
+  if(_.has(object, 'x-content-type-options')){
+    return object['x-content-type-options'].toLowerCase() === 'nosniff';
   }
   return false;
 }

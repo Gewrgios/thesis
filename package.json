@@ -5,11 +5,14 @@
   "main": "app.js",
   "dependencies": {
     "async": "^0.9.0",
+    "bson": "^0.4.6",
     "casper": "^0.1.1",
+    "express": "^4.12.4",
     "lodash": "^2.4.1",
     "mongoose": "^3.8.21",
     "phantom": "^0.7.1",
     "phantomjs": "^1.9.17",
+    "request": "^2.58.0",
     "sleep": "^1.2.0",
     "underscore": "^1.7.0"
   },
