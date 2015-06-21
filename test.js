@@ -8,8 +8,10 @@ var mongoose = require('mongoose');
 var app = require('./app');
 mongoose.connection.on('error', console.log);
 mongoose.connection.on('connect', console.log);
-var HARVEST = true;
-var SAVE = true;
+var CLEAR = false;
+var HARVEST = false;
+var SAVE = false;
+var SENSITIVE = true;
 // require models
 require('./models');
 
@@ -53,7 +55,7 @@ function _harvest(parent_callback){
         var site = new Site({
           name: url,
           urls: url,
-          meta: data
+          meta: data,
         })
         site.save(function (err) {
           if(err){
@@ -88,6 +90,13 @@ async.waterfall([
         callback(null);
       }
     },
+    function(callback){
+      if(SENSITIVE){
+        _check_for_sensitive_files(callback);
+      }else{
+        callback(null);
+      }
+    },
     function(callback) {
       callback(null);
     }
@@ -103,7 +112,9 @@ function _check(name, data, callback_parent){
     csp: check_csp(data),
     httponly_cookies: check_httponly_cookies(data),
     xfo: check_xfo(data),
-    x_content: check_x_content(data)
+    x_content: check_x_content(data),
+    x_xss_protection: check_x_xss_protection(data),
+    check_outdated_server: check_outdated_server(data)
   }
   var site = Site.findOne({name:name}, function(error, site){
     site.results = results;
@@ -156,12 +167,12 @@ function check_xfo(object){
 // Iframe sandboxing
 function check_iframe_sandboxing(text){
   // Check sanbox attribute
-  return true;
+  return _.has(text, 'sandbox');
 }
 // CSRF
 function check_csrf(text){
   // Check forms for csrf
-  return true;
+  return _.has(text, 'csrf');
 }
 // Content options
 function check_x_content(object){
@@ -170,4 +181,59 @@ function check_x_content(object){
     return object['x-content-type-options'].toLowerCase() === 'nosniff';
   }
   return false;
+}
+
+function check_x_xss_protection(object){
+  // Check `x-xss-protection`
+  return _.has(object, 'x-xss-protection');
+}
+
+function check_outdated_server(object){
+  if(_.has(object, 'server')){
+    var result = _.some(configure.softwareVersions, function(word) {
+        return object['server'].toLowerCase() === word;
+    });
+    return result;
+  }
+  // For microsoft
+  if(_.has(object, 'Server')){
+    var result = _.some(configure.softwareVersions, function(word) {
+        return object['Server'].toLowerCase() === word;
+    });
+    return result;
+  }
+  return true;
+}
+
+// Put it as async tasks
+function _check_for_sensitive_files(parent_callback) {
+  // Check for sensitive files
+  var data = {};
+  async.eachSeries(configure.websites, function(url, callback){
+    data[url] = {};
+    async.eachSeries(configure.sensitiveFiles, function(file, callbackSensitive){
+      var check_url = util.format('%s/%s', url, file);
+      request(check_url, function(http_error, response, body){
+        console.log('Error', check_url, file.replace('.', '_'), http_error);
+        data[url][file.replace('.', '_')] = (response.responseCode == 200) ? true : false;
+        data[url]['csrf'] = check_csrf(response);
+        data[url]['iframe_sandboxing'] = check_iframe_sandboxing(response);
+        callbackSensitive();
+      });
+    }, function(err){
+      // HERE
+      var site = Site.findOne({name:url}, function(error, site){
+        site.results = _.extend(data[url], site.results);
+        site.save(function (err) {
+          if(err){
+            console.log('Error', err);
+          }
+          callback();
+        });
+      })
+      // HERE
+    });
+  }, function(err){
+    parent_callback(null);
+  });
 }

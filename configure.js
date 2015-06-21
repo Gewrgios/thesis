@@ -70,5 +70,17 @@ module.exports = {
     'http://www.newsrebel.gr',
     'http://www.sintagespareas.gr',
     'http://www.gocar.gr'
+  ],
+  sensitiveFiles: [
+    '.httacess',
+    '.git',
+    'phpinfo.php',
+    'test.php',
+    'Web.config',
+    '.svn',
+    '.git',
+  ],
+  softwareVersions: [
+    'Apache/2.2', 'Apache/2.4', 'Microsoft-IIS/8.0'
   ]
 }

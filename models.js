@@ -5,7 +5,7 @@ var SiteSchema = new mongoose.Schema({
   urls: Array,
   meta: Object,
   results: Object,
-  worldwide: Boolean
+  worldwide: Boolean,
 });
 
 
