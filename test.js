@@ -29,11 +29,9 @@ var configure = require('./configure');
 var Site = mongoose.model('Sites');
 
 function _check_level_1(parent_callback){
-  console.log('_check_level_1');
   var promise = Site.find({}).exec();
   promise.then(function(sites){
     async.eachSeries(sites, function(site, callback_level_1){
-      console.log('Site', site.name);
       _check(site.name, site.meta, callback_level_1);
     }, function(err){
       if(err){
@@ -48,9 +46,7 @@ function _harvest(parent_callback){
   async.eachSeries(configure.websites, function(url, callback){
     var data = [];
     request(url, function(http_error, response, body){
-      console.log('[Parsing]', url);
       if(response.statusCode == 200 && !http_error){
-        console.log('[RESPONSE]', response.headers);
         var data = response.headers;
         var site = new Site({
           name: url,
@@ -59,7 +55,7 @@ function _harvest(parent_callback){
         })
         site.save(function (err) {
           if(err){
-            console.log('Error');
+            console.log('Error', err);
           }
           callback();
         });
@@ -69,7 +65,6 @@ function _harvest(parent_callback){
     if (err){
       console.log('Error', err);
     }
-    console.log('DONE Harvesting');
     parent_callback(null);
   });
 }
@@ -136,7 +131,7 @@ function check_hsts(object){
 function check_secure_cookies(object){
   if (_.has(object, 'set-cookie')){
     var result = _.some(['https', 'secure'], function(word) {
-        return  object['set-cookie'][0].toLowerCase().search(word) > 0
+      return  object['set-cookie'][0].toLowerCase().search(word) > 0
     });
     return result;
   }
@@ -176,18 +171,19 @@ function check_csrf(text){
 }
 // Content options
 function check_x_content(object){
-  // Check `X-Content-Type-Options`
   if(_.has(object, 'x-content-type-options')){
     return object['x-content-type-options'].toLowerCase() === 'nosniff';
   }
   return false;
 }
 
+// Check X-XSS-Protection
 function check_x_xss_protection(object){
   // Check `x-xss-protection`
   return _.has(object, 'x-xss-protection');
 }
 
+// Outdated server software
 function check_outdated_server(object){
   if(_.has(object, 'server')){
     var result = _.some(configure.softwareVersions, function(word) {
@@ -198,7 +194,7 @@ function check_outdated_server(object){
   // For microsoft
   if(_.has(object, 'Server')){
     var result = _.some(configure.softwareVersions, function(word) {
-        return object['Server'].toLowerCase() === word;
+      return object['Server'].toLowerCase() === word;
     });
     return result;
   }
@@ -210,18 +206,16 @@ function _check_for_sensitive_files(parent_callback) {
   // Check for sensitive files
   var data = {};
   async.eachSeries(configure.websites, function(url, callback){
-    data[url] = {};
+    data[url] = {'sensitive':{}};
     async.eachSeries(configure.sensitiveFiles, function(file, callbackSensitive){
       var check_url = util.format('%s/%s', url, file);
       request(check_url, function(http_error, response, body){
-        console.log('Error', check_url, file.replace('.', '_'), http_error);
-        data[url][file.replace('.', '_')] = (response.responseCode == 200) ? true : false;
+        data[url]['sensitive'][file.replace('.', '_')] = (response.responseCode == 200) ? true : false;
         data[url]['csrf'] = check_csrf(response);
         data[url]['iframe_sandboxing'] = check_iframe_sandboxing(response);
         callbackSensitive();
       });
     }, function(err){
-      // HERE
       var site = Site.findOne({name:url}, function(error, site){
         site.results = _.extend(data[url], site.results);
         site.save(function (err) {
@@ -231,7 +225,6 @@ function _check_for_sensitive_files(parent_callback) {
           callback();
         });
       })
-      // HERE
     });
   }, function(err){
     parent_callback(null);
